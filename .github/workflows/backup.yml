@@ -1,0 +1,26 @@
+name: Org Backup
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+env:
+  BACKUP_TOKEN: ${{ secrets.BACKUP_PAT }}
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone all org repos
+        run: |
+          curl -H "Authorization: token $BACKUP_TOKEN" \
+            https://api.github.com/orgs/${{ github.repository_owner }}/repos?per_page=100 \
+            | python3 -c "import json,sys; [print(r['clone_url']) for r in json.load(sys.stdin)]" \
+            | while read url; do
+                auth_url=$(echo $url | sed "s|https://|https://x-access-token:$BACKUP_TOKEN@|")
+                git clone --mirror "$auth_url" ./backup/ 2>&1
+              done
+      - name: Upload backup
+        uses: actions/upload-artifact@v3
+        with:
+          name: org-backup-${{ github.run_id }}
+          path: ./backup/
+          retention-days: 30
